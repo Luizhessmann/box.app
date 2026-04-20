@@ -73,14 +73,18 @@
     s.className = 'status' + (err ? ' err' : '');
   }
 
-  function goApp(token){
-    setStatus('abrindo box...');
-    var target = getReturnUrl();
-    // fragment (#) nunca vai pra logs de servidor — token fica só no browser
-    var finalUrl = target + (target.indexOf('#') >= 0 ? '&' : '#') + 't=' + encodeURIComponent(token);
-    document.body.classList.add('leaving');
-    setTimeout(function(){ location.replace(finalUrl); }, 380);
-  }
+ function goApp(token){
+  setStatus('abrindo box...');
+  var target = getReturnUrl();
+  // Usa ?t= em vez de #t=  → o iframe do Apps Script NÃO consegue ler
+  // fragments da URL top; query params sim (via doGet(e.parameter.t)).
+  // Trade-off: ?t= pode aparecer em logs do Google; mitigado por token
+  // curto (~1h) + history.replaceState no cliente limpando a URL.
+  var sep = target.indexOf('?') >= 0 ? '&' : '?';
+  var finalUrl = target + sep + 't=' + encodeURIComponent(token);
+  document.body.classList.add('leaving');
+  setTimeout(function(){ location.replace(finalUrl); }, 380);
+}
 
   function handleCredential(r){
     if (r && r.credential) goApp(r.credential);
