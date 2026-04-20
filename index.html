@@ -46,6 +46,27 @@
   var CLIENT_ID = '573698026657-jpn2oi1v2aroi4rfd2ug7mvcl7eqjj3i.apps.googleusercontent.com';
   var APP_URL   = 'https://script.google.com/macros/s/AKfycbyD4ot549cf-flA68j6iazK9bLQgMrXs7swTAJkojCiDmg1NWgEhzMt6A6tIjhd58uP/exec';
 
+  // Prefixos permitidos para o parâmetro ?return=... (open-redirect guard)
+  // Só aceita URLs do Apps Script — caso contrário o token OAuth poderia vazar
+  // para um destino controlado por um atacante.
+  var ALLOWED_RETURN_PREFIXES = [
+    'https://script.google.com/macros/s/',
+    'https://script.googleusercontent.com/'
+  ];
+
+  function getReturnUrl() {
+    try {
+      var params = new URLSearchParams(location.search);
+      var ret = params.get('return');
+      if (!ret) return APP_URL;
+      // Valida explicitamente o prefixo — protege contra open-redirect
+      for (var i = 0; i < ALLOWED_RETURN_PREFIXES.length; i++) {
+        if (ret.indexOf(ALLOWED_RETURN_PREFIXES[i]) === 0) return ret;
+      }
+      return APP_URL; // return não autorizado → usa default
+    } catch (e) { return APP_URL; }
+  }
+
   function setStatus(msg, err){
     var s = document.getElementById('status');
     s.textContent = msg;
@@ -54,10 +75,11 @@
 
   function goApp(token){
     setStatus('abrindo box...');
+    var target = getReturnUrl();
     // fragment (#) nunca vai pra logs de servidor — token fica só no browser
-    var target = APP_URL + '#t=' + encodeURIComponent(token);
+    var finalUrl = target + (target.indexOf('#') >= 0 ? '&' : '#') + 't=' + encodeURIComponent(token);
     document.body.classList.add('leaving');
-    setTimeout(function(){ location.replace(target); }, 380);
+    setTimeout(function(){ location.replace(finalUrl); }, 380);
   }
 
   function handleCredential(r){
@@ -71,16 +93,28 @@
   }
 
   waitGIS(function(){
+    // Se a URL tem ?return=..., é porque o usuário veio do app pedindo login
+    // explicitamente → pula One Tap, vai direto pro botão (prompt consistente).
+    var hasReturn = (new URLSearchParams(location.search)).has('return');
+
     google.accounts.id.initialize({
       client_id: CLIENT_ID,
       callback: handleCredential,
-      auto_select: true,
+      auto_select: !hasReturn,
       itp_support: true
     });
-    // Tenta One Tap automático (se o usuário já tá logado no Chrome, entra sozinho)
+
+    if (hasReturn) {
+      setStatus('Entre com sua conta Google');
+      google.accounts.id.renderButton(document.getElementById('gbtn'), {
+        theme:'filled_black', size:'large', type:'standard', shape:'pill', text:'signin_with', width:260
+      });
+      return;
+    }
+
+    // Abertura normal (sem ?return=): tenta One Tap automático
     google.accounts.id.prompt(function(notification){
       if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        // Fallback: mostra botão manual
         setStatus('Entre com sua conta Google');
         google.accounts.id.renderButton(document.getElementById('gbtn'), {
           theme:'filled_black', size:'large', type:'standard', shape:'pill', text:'signin_with', width:260
