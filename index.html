@@ -6,19 +6,89 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0b0a0f">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/android/android-launchericon-192-192.png">
+<link rel="icon" href="icons/android/launchericon-192-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500&display=swap">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
-  html,body{margin:0;padding:0;background:#0b0a0f;color:#a78bfa;font-family:system-ui,sans-serif;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
-  .dot{width:10px;height:10px;border-radius:50%;background:#a78bfa;animation:p 1s ease-in-out infinite}
-  @keyframes p{0%,100%{opacity:.3}50%{opacity:1}}
-  .label{font-size:12px;letter-spacing:4px;text-transform:uppercase;opacity:.5}
+  :root{--bg:#0b0a0f;--accent:#a78bfa;--accent-d:#8b5cf6;--text:#e8e7ec;--text-3:#6b6b78;--text-4:#4a4a55;--danger:#f87171}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+  body{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;padding:30px;text-align:center;position:relative;transition:opacity .35s ease}
+  body.leaving{opacity:0}
+  body::before{content:"";position:absolute;width:420px;height:420px;background:radial-gradient(circle,rgba(139,92,246,.18) 0,transparent 70%);filter:blur(40px);animation:pulse 3s ease-in-out infinite;pointer-events:none}
+  @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+  .hex{position:relative;z-index:1;width:72px;height:72px;color:var(--accent);filter:drop-shadow(0 0 18px rgba(167,139,250,.45));animation:in .7s cubic-bezier(.2,1.4,.5,1) both}
+  @keyframes in{from{opacity:0;transform:scale(.5) rotate(-15deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+  .title{position:relative;z-index:1;font-family:'Cinzel',serif;font-weight:700;font-size:42px;letter-spacing:6px;color:var(--text);text-shadow:0 0 24px rgba(139,92,246,.3);opacity:0;animation:fu .5s .3s forwards}
+  .sub{position:relative;z-index:1;font-size:12px;color:var(--text-3);letter-spacing:2px;opacity:0;animation:fu .5s .5s forwards}
+  .status{position:relative;z-index:1;margin-top:14px;font-size:11px;color:var(--text-4);letter-spacing:3px;text-transform:uppercase;opacity:0;animation:fu .5s .8s forwards}
+  .status.err{color:var(--danger)}
+  .gbtn-wrap{position:relative;z-index:1;margin-top:16px;min-height:44px;opacity:0;animation:fu .5s 1s forwards}
+  @keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
-  <div class="dot"></div>
-  <div class="label">abrindo box...</div>
-  <script>
-    location.replace('https://script.google.com/macros/s/AKfycbyD4ot549cf-flA68j6iazK9bLQgMrXs7swTAJkojCiDmg1NWgEhzMt6A6tIjhd58uP/exec');
-  </script>
+  <svg class="hex" viewBox="0 0 80 80" aria-hidden="true">
+    <polygon points="40,6 70,22 70,58 40,74 10,58 10,22" fill="none" stroke="currentColor" stroke-width="2"/>
+    <polygon points="40,18 58,28 58,52 40,62 22,52 22,28" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"/>
+    <circle cx="40" cy="40" r="5" fill="currentColor"/>
+  </svg>
+  <div class="title">BOX</div>
+  <div class="sub">registro de jornadas</div>
+  <div class="status" id="status">verificando sessão...</div>
+  <div class="gbtn-wrap" id="gbtn"></div>
+
+<script>
+(function(){
+  'use strict';
+  var CLIENT_ID = '573698026657-jpn2oi1v2aroi4rfd2ug7mvcl7eqjj3i.apps.googleusercontent.com';
+  var APP_URL   = 'https://script.google.com/macros/s/AKfycbyD4ot549cf-flA68j6iazK9bLQgMrXs7swTAJkojCiDmg1NWgEhzMt6A6tIjhd58uP/exec';
+
+  function setStatus(msg, err){
+    var s = document.getElementById('status');
+    s.textContent = msg;
+    s.className = 'status' + (err ? ' err' : '');
+  }
+
+  function goApp(token){
+    setStatus('abrindo box...');
+    // fragment (#) nunca vai pra logs de servidor — token fica só no browser
+    var target = APP_URL + '#t=' + encodeURIComponent(token);
+    document.body.classList.add('leaving');
+    setTimeout(function(){ location.replace(target); }, 380);
+  }
+
+  function handleCredential(r){
+    if (r && r.credential) goApp(r.credential);
+    else setStatus('falha no login', true);
+  }
+
+  function waitGIS(cb){
+    if (window.google && google.accounts && google.accounts.id) return cb();
+    setTimeout(function(){ waitGIS(cb); }, 120);
+  }
+
+  waitGIS(function(){
+    google.accounts.id.initialize({
+      client_id: CLIENT_ID,
+      callback: handleCredential,
+      auto_select: true,
+      itp_support: true
+    });
+    // Tenta One Tap automático (se o usuário já tá logado no Chrome, entra sozinho)
+    google.accounts.id.prompt(function(notification){
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        // Fallback: mostra botão manual
+        setStatus('Entre com sua conta Google');
+        google.accounts.id.renderButton(document.getElementById('gbtn'), {
+          theme:'filled_black', size:'large', type:'standard', shape:'pill', text:'signin_with', width:260
+        });
+      }
+    });
+  });
+})();
+</script>
 </body>
 </html>
